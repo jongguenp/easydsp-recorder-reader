@@ -1,6 +1,6 @@
 (()=>{"use strict";
-const $=id=>document.getElementById(id),P=16,SKEY="easydsp-rec-settings-v3",DBNAME="easydsp-rec-db",STORE="files";
-const state={ts:1,files:[],aliases:{},colors:{},units:{},visible:{},fileVisible:{},derived:[],scale:"common",zero:false,view:{start:0,end:1},cursorA:null,cursorB:null,nextCursor:"A"};
+const $=id=>document.getElementById(id),P=16,SKEY="easydsp-rec-settings-v2";
+const state={ts:1,files:[],aliases:{},colors:{},visible:{},derived:[],scale:"common",zero:false,view:{start:0,end:1},cursorA:null,cursorB:null,nextCursor:"A"};
 const palette=["#2563eb","#dc2626","#059669","#7c3aed","#d97706","#0891b2","#db2777","#4f46e5"];
 class RecError extends Error{}
 function ascii(u){let s="",c=8192;for(let i=0;i<u.length;i+=c)s+=String.fromCharCode(...u.subarray(i,Math.min(i+c,u.length)));return s}
@@ -25,41 +25,30 @@ function infer(u,ch){
  for(let o=Math.ceil(start/4)*4;o<end;o+=4){let counts=[],tot=0,ok=true;for(let i=0;i<n;i++){const c=v.getUint32(o+4*i,true);if(c<2||c>1e7){ok=false;break}counts.push(c);tot+=c}if(!ok)continue;const ds=u.length-P*tot;if(ds<=o||ds<0||ds%8)continue;const sc=score(v,ds,counts);if(sc>=6*n)cand.push({o,counts,ds,sc})}
  if(!cand.length)throw new RecError("지원하지 않는 REC 형식입니다.");cand.sort((a,b)=>b.sc-a.sc||a.o-b.o);return cand[0]
 }
-function parse(buf,name,id){
+function parse(buf,name){
  const u=new Uint8Array(buf);if(u.length<256)throw new RecError("REC 파일이 너무 작습니다.");
  const ch=channels(u),inf=infer(u,ch),v=new DataView(u.buffer,u.byteOffset,u.byteLength);let p=inf.ds,out=[];
  ch.forEach((c,k)=>{const n=inf.counts[k],tx=[],ty=[];for(let i=0;i<n;i++){const xv=v.getFloat64(p+i*P,true),yv=v.getFloat64(p+i*P+8,true);if(Number.isFinite(xv)&&Number.isFinite(yv)&&Math.abs(yv)<1e300){tx.push(xv);ty.push(yv)}}out.push({name:c.name,x:Float64Array.from(tx),y:Float64Array.from(ty)});p+=n*P});
  if(p!==u.length)throw new RecError("payload 길이가 일치하지 않습니다.");
- return{id:id||fileId(name,buf),name,channels:out}
+ return{id:crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random(),name,channels:out}
 }
-function fileId(name,buf){const u=new Uint8Array(buf),step=Math.max(1,Math.floor(u.length/64));let h=2166136261>>>0;for(let i=0;i<u.length;i+=step){h^=u[i];h=Math.imul(h,16777619)>>>0}for(let i=0;i<name.length;i++){h^=name.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return "f"+h.toString(16)+"-"+u.length}
-function dbOpen(){return new Promise((resolve,reject)=>{if(!("indexedDB"in window))return resolve(null);const q=indexedDB.open(DBNAME,1);q.onupgradeneeded=()=>{const db=q.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:"id"})};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
-async function dbPut(rec){const db=await dbOpen();if(!db)return;return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(rec);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
-async function dbDelete(id){const db=await dbOpen();if(!db)return;return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
-async function dbClear(){const db=await dbOpen();if(!db)return;return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).clear();tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
-async function dbAll(){const db=await dbOpen();if(!db)return[];return new Promise((resolve,reject)=>{const q=db.transaction(STORE,"readonly").objectStore(STORE).getAll();q.onsuccess=()=>resolve(q.result||[]);q.onerror=()=>reject(q.error)})}
-function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||localStorage.getItem("easydsp-rec-settings-v1")||"{}");Object.assign(state,{ts:+s.ts||1,aliases:s.aliases||{},colors:s.colors||{},units:s.units||{},visible:s.visible||{},fileVisible:s.fileVisible||{},scale:s.scale||"common",zero:!!s.zero,derived:s.derived||[]})}catch{}}
-function persistSettings(){localStorage.setItem(SKEY,JSON.stringify({ts:state.ts,aliases:state.aliases,colors:state.colors,units:state.units,visible:state.visible,fileVisible:state.fileVisible,scale:state.scale,zero:state.zero,derived:state.derived.map(d=>({a:d.a,b:d.b,name:d.name,color:d.color,unit:d.unit||""}))}))}
-function save(){persistSettings();alert("설정을 저장했습니다.")}
+function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||localStorage.getItem("easydsp-rec-settings-v1")||"{}");Object.assign(state,{ts:+s.ts||1,aliases:s.aliases||{},colors:s.colors||{},visible:s.visible||{},scale:s.scale||"common",zero:!!s.zero,derived:s.derived||[]})}catch{}}
+function save(){localStorage.setItem(SKEY,JSON.stringify({ts:state.ts,aliases:state.aliases,colors:state.colors,visible:state.visible,scale:state.scale,zero:state.zero,derived:state.derived.map(d=>({a:d.a,b:d.b,name:d.name,color:d.color}))}));alert("설정을 저장했습니다.")}
 function sid(f,c){return f.id+"::"+c.name}
 function alias(n){return state.aliases[n]||n}
-function unit(n){return state.units[n]||""}
 function color(n){if(!state.colors[n])state.colors[n]=palette[(+(n.match(/\d+/)||[0])[0])%palette.length];return state.colors[n]}
-function base(){let a=[];for(const f of state.files)for(const c of f.channels){const id=sid(f,c);a.push({id,fileId:f.id,file:f.name,original:c.name,name:alias(c.name),unit:unit(c.name),color:color(c.name),x:c.x,y:c.y,visible:state.fileVisible[f.id]!==false&&state.visible[id]!==false})}return a}
+function base(){let a=[];for(const f of state.files)for(const c of f.channels){const id=sid(f,c);a.push({id,file:f.name,original:c.name,name:alias(c.name),color:color(c.name),x:c.x,y:c.y,visible:state.visible[id]!==false})}return a}
 function all(){const b=base(),map=new Map(b.map(x=>[x.id,x])),d=[];for(const q of state.derived){const A=map.get(q.a),B=map.get(q.b);if(!A||!B)continue;const n=Math.min(A.y.length,B.y.length),y=new Float64Array(n),x=new Float64Array(n);for(let i=0;i<n;i++){x[i]=i;y[i]=A.y[i]-B.y[i]}d.push({id:"d:"+q.a+"-"+q.b+"-"+q.name,file:"계산",original:q.name,name:q.name,color:q.color||"#111827",x,y,visible:true,derived:true})}return b.concat(d)}
 function visibleSeries(){return all().filter(s=>s.visible)}
-function label(s){return s.unit?s.name+" ["+s.unit+"]":s.name}
 function fmt(v){if(!Number.isFinite(v))return"-";const a=Math.abs(v);return a>=1e4||a&&a<1e-3?v.toExponential(4):v.toFixed(4).replace(/\.?0+$/,"")}
 function time(i){return i*state.ts/1000}
 function maxN(){const s=visibleSeries();return s.length?Math.max(...s.map(x=>x.y.length)):0}
 function clampView(){let a=Math.max(0,Math.min(.999999,state.view.start)),b=Math.max(.000001,Math.min(1,state.view.end));if(b-a<.002){const m=(a+b)/2;a=m-.001;b=m+.001}if(a<0){b-=a;a=0}if(b>1){a-=b-1;b=1}state.view.start=Math.max(0,a);state.view.end=Math.min(1,b)}
 function resetView(){state.view={start:0,end:1};draw()}
 function viewIndices(n){if(n<=1)return[0,0];clampView();return[Math.floor(state.view.start*(n-1)),Math.max(1,Math.ceil(state.view.end*(n-1)))]}
-function renderFiles(){const el=$("files");if(!state.files.length){el.innerHTML="<div class=\"empty\">REC 파일을 선택하세요.</div>";return}el.innerHTML=state.files.map(f=>"<div class=\"file-row\"><input class=\"file-toggle\" type=\"checkbox\" data-file-vis=\""+f.id+"\" "+(state.fileVisible[f.id]!==false?"checked":"")+"><div><div class=\"file-name\"><b>"+f.name+"</b></div><div class=\"hint\">"+f.channels.length+" channels · "+(f.channels[0]?.y.length||0)+" samples <span class=\"persist-badge\">로컬 저장</span></div></div><div class=\"file-actions\"><button class=\"chip mini\" data-file-only=\""+f.id+"\">이 파일만</button><button class=\"link danger\" data-file-del=\""+f.id+"\">삭제</button></div></div>").join("");el.querySelectorAll("[data-file-vis]").forEach(x=>x.onchange=()=>{state.fileVisible[x.dataset.fileVis]=x.checked;renderChannels();renderLegend();renderStats();renderRangeStats();draw();persistSettings()});el.querySelectorAll("[data-file-only]").forEach(x=>x.onclick=()=>{const id=x.dataset.fileOnly;for(const f of state.files)state.fileVisible[f.id]=f.id===id;renderFiles();renderChannels();renderLegend();renderStats();renderRangeStats();draw();persistSettings()});el.querySelectorAll("[data-file-del]").forEach(x=>x.onclick=()=>removeFile(x.dataset.fileDel))}
-function renderChannels(){const list=$("channelList");if(!state.files.length){list.innerHTML="<div class=\"empty\">REC 파일을 먼저 열어주세요.</div>";return}list.innerHTML=state.files.map(f=>{const rows=f.channels.map(ch=>{const id=sid(f,ch),on=state.visible[id]!==false;return "<div class=\"channel\"><input type=\"checkbox\" data-vis=\""+id+"\" "+(on?"checked":"")+" "+(state.fileVisible[f.id]===false?"disabled":"")+"><div class=\"channel-main\"><div><div class=\"hint\">"+ch.name+"</div><input type=\"text\" data-alias=\""+ch.name+"\" value=\""+alias(ch.name)+"\"></div><input class=\"unit\" type=\"text\" data-unit=\""+ch.name+"\" value=\""+unit(ch.name)+"\" placeholder=\"단위\"></div><input type=\"color\" data-color=\""+ch.name+"\" value=\""+color(ch.name)+"\"></div>"}).join("");return "<div class=\"group\"><div class=\"group-head\"><div class=\"group-title\">"+f.name+"</div><div><button class=\"chip mini\" data-group-on=\""+f.id+"\">모두 ON</button> <button class=\"chip mini\" data-group-off=\""+f.id+"\">모두 OFF</button></div></div>"+rows+"</div>"}).join("");list.querySelectorAll("[data-vis]").forEach(x=>x.onchange=()=>{state.visible[x.dataset.vis]=x.checked;renderLegend();renderStats();renderRangeStats();draw();persistSettings()});list.querySelectorAll("[data-alias]").forEach(x=>x.onchange=()=>{state.aliases[x.dataset.alias]=x.value.trim()||x.dataset.alias;renderAll();persistSettings()});list.querySelectorAll("[data-unit]").forEach(x=>x.onchange=()=>{state.units[x.dataset.unit]=x.value.trim();renderAll();persistSettings()});list.querySelectorAll("[data-color]").forEach(x=>x.oninput=()=>{state.colors[x.dataset.color]=x.value;renderAll();persistSettings()});list.querySelectorAll("[data-group-on]").forEach(x=>x.onclick=()=>setGroup(x.dataset.groupOn,true));list.querySelectorAll("[data-group-off]").forEach(x=>x.onclick=()=>setGroup(x.dataset.groupOff,false))}
-function setGroup(fileId,on){const f=state.files.find(x=>x.id===fileId);if(!f)return;if(on)state.fileVisible[fileId]=true;for(const ch of f.channels)state.visible[sid(f,ch)]=on;renderFiles();renderChannels();renderLegend();renderStats();renderRangeStats();draw();persistSettings()}
-function setAll(on){if(on)for(const f of state.files)state.fileVisible[f.id]=true;for(const f of state.files)for(const ch of f.channels)state.visible[sid(f,ch)]=on;renderFiles();renderChannels();renderLegend();renderStats();renderRangeStats();draw();persistSettings()}
-function renderLegend(){const v=visibleSeries();$("legend").innerHTML=v.map(s=>`<span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:5px"></i>${label(s)}<small> · ${s.file}</small></span>`).join("")}
+function renderFiles(){$("files").innerHTML=state.files.length?state.files.map(f=>`<div><b>${f.name}</b><div class="hint">${f.channels.length} channels · ${f.channels[0]?.y.length||0} samples</div></div>`).join(""):'<div class="empty">REC 파일을 선택하세요.</div>'}
+function renderChannels(){const list=$("channelList"),items=base();if(!items.length){list.innerHTML='<div class="empty">REC 파일을 먼저 열어주세요.</div>';return}list.innerHTML=items.map(s=>`<div class="channel"><input type="checkbox" data-vis="${s.id}" ${s.visible?"checked":""}><div><div class="hint">${s.file} · ${s.original}</div><input type="text" data-alias="${s.original}" value="${alias(s.original)}"></div><input type="color" data-color="${s.original}" value="${color(s.original)}"></div>`).join("");list.querySelectorAll("[data-vis]").forEach(x=>x.onchange=()=>{state.visible[x.dataset.vis]=x.checked;draw();renderStats();renderLegend();renderRangeStats()});list.querySelectorAll("[data-alias]").forEach(x=>x.onchange=()=>{state.aliases[x.dataset.alias]=x.value.trim()||x.dataset.alias;renderAll()});list.querySelectorAll("[data-color]").forEach(x=>x.oninput=()=>{state.colors[x.dataset.color]=x.value;renderAll()})}
+function renderLegend(){const v=visibleSeries();$("legend").innerHTML=v.map(s=>`<span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:5px"></i>${s.name}<small> · ${s.file}</small></span>`).join("")}
 function fillDiff(){const a=base();for(const id of["a","b"])$(id).innerHTML=a.map(s=>`<option value="${s.id}">${s.file} · ${s.name}</option>`).join("")}
 function statsRange(s,lo=0,hi=s.y.length-1){lo=Math.max(0,Math.min(lo,s.y.length-1));hi=Math.max(lo,Math.min(hi,s.y.length-1));let min=Infinity,max=-Infinity,mi=lo,ma=lo,sum=0,sq=0,n=0;for(let i=lo;i<=hi;i++){const y=s.y[i];if(y<min){min=y;mi=i}if(y>max){max=y;ma=i}sum+=y;sq+=y*y;n++}return{min,max,mi,ma,mean:sum/n,rms:Math.sqrt(sq/n),n}}
 function renderStats(){const v=visibleSeries();$("stats").innerHTML=v.length?v.map(s=>{const q=statsRange(s);return`<tr><td>${s.name}<br><small>${s.file}</small></td><td>${fmt(q.min)}</td><td>${time(q.mi).toFixed(4)} s</td><td>${fmt(q.max)}</td><td>${time(q.ma).toFixed(4)} s</td><td>${fmt(q.mean)}</td><td>${fmt(q.rms)}</td></tr>`}).join(""):'<tr><td colspan="7">표시 데이터가 없습니다.</td></tr>'}
@@ -71,8 +60,7 @@ function renderCursorSummary(){
  if(state.cursorA!=null)lines.push(`A: Sample ${state.cursorA} · ${time(state.cursorA).toFixed(6)} s`);
  if(state.cursorB!=null)lines.push(`B: Sample ${state.cursorB} · ${time(state.cursorB).toFixed(6)} s`);
  if(state.cursorA!=null&&state.cursorB!=null){const dt=Math.abs(time(state.cursorB)-time(state.cursorA));lines.push(`Δt: ${dt.toFixed(6)} s`);for(const s of v){const a=s.y[Math.min(state.cursorA,s.y.length-1)],b=s.y[Math.min(state.cursorB,s.y.length-1)];lines.push(`${s.name} ΔY: ${fmt(b-a)}`)}}
- el.className="cursor-summary";el.textContent=lines.join("
-");el.style.whiteSpace="pre-line"
+ el.className="cursor-summary";el.textContent=lines.join("\n");el.style.whiteSpace="pre-line"
 }
 function renderRangeStats(){
  const p=cursorPair(),v=visibleSeries(),body=$("rangeStats"),info=$("rangeInfo");
@@ -99,8 +87,7 @@ function draw(){
 function setCursor(i){const n=maxN();if(!n)return;i=Math.max(0,Math.min(n-1,i));if(state.nextCursor==="A"){state.cursorA=i;state.nextCursor="B"}else{state.cursorB=i;state.nextCursor="A"}draw();renderRangeStats()}
 function clearCursors(){state.cursorA=null;state.cursorB=null;state.nextCursor="A";$("tip").classList.add("hidden");draw();renderRangeStats();renderCursorSummary()}
 function renderAll(){renderFiles();renderChannels();renderLegend();fillDiff();renderStats();renderRangeStats();draw()}
-async function openFiles(fs){for(const f of fs){try{state.files.push(parse(await f.arrayBuffer(),f.name))}catch(e){alert(f.name+"
-"+e.message)}}state.view={start:0,end:1};clearCursors();renderAll()}
+async function openFiles(fs){for(const f of fs){try{state.files.push(parse(await f.arrayBuffer(),f.name))}catch(e){alert(f.name+"\n"+e.message)}}state.view={start:0,end:1};clearCursors();renderAll()}
 load();
 $("ts").value=state.ts;$("scale").value=state.scale;$("zero").checked=state.zero;
 $("file").onchange=e=>openFiles(e.target.files);
@@ -122,9 +109,7 @@ cv.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;const p=pt
  if(pts.size===1&&gesture?.type==="pan"&&moved){const dx=e.clientX-gesture.x,span=gesture.start.end-gesture.start.start,shift=-dx/Math.max(1,r.width-60)*span;state.view.start=gesture.start.start+shift;state.view.end=gesture.start.end+shift;clampView();draw()}
  else if(pts.size>=2){const a=[...pts.values()].slice(0,2),d=dist(a[0],a[1]);if(!gesture||gesture.type!=="pinch"){gesture={type:"pinch",start:{...state.view},d,mid:(a[0].x+a[1].x)/2}}const ratio=Math.max(.2,Math.min(5,gesture.d/Math.max(1,d))),oldSpan=gesture.start.end-gesture.start.start,newSpan=Math.max(.002,Math.min(1,oldSpan*ratio)),midX=(a[0].x+a[1].x)/2,anchor=Math.max(0,Math.min(1,(midX-r.left-48)/Math.max(1,r.width-60))),center=gesture.start.start+anchor*oldSpan;state.view.start=center-anchor*newSpan;state.view.end=state.view.start+newSpan;clampView();moved=true;draw()}
 });
-function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;pts.delete(e.pointerId);if(single&&!moved&&was){const i=chartIndex(e.clientX);setCursor(i);const s=visibleSeries();$("tip").classList.remove("hidden");$("tip").textContent="Cursor "+(state.nextCursor==="A"?"B":"A")+" · Sample "+i+" · "+time(i).toFixed(6)+" s
-"+s.map(x=>x.name+": "+fmt(x.y[Math.min(i,x.y.length-1)])).join("
-")}if(!pts.size)gesture=null}
+function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;pts.delete(e.pointerId);if(single&&!moved&&was){const i=chartIndex(e.clientX);setCursor(i);const s=visibleSeries();$("tip").classList.remove("hidden");$("tip").textContent="Cursor "+(state.nextCursor==="A"?"B":"A")+" · Sample "+i+" · "+time(i).toFixed(6)+" s\n"+s.map(x=>x.name+": "+fmt(x.y[Math.min(i,x.y.length-1)])).join("\n")}if(!pts.size)gesture=null}
 cv.addEventListener("pointerup",pointerEnd);cv.addEventListener("pointercancel",pointerEnd);
 window.addEventListener("resize",draw);
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});
