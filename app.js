@@ -114,19 +114,25 @@ function draw(){
 function setCursor(i){const n=maxN();if(!n)return;i=Math.max(0,Math.min(n-1,i));if(state.nextCursor==="A"){state.cursorA=i;state.nextCursor="B"}else{state.cursorB=i;state.nextCursor="A"}draw();renderRangeStats()}
 function clearCursors(){state.cursorA=null;state.cursorB=null;state.nextCursor="A";$("tip").classList.add("hidden");draw();renderRangeStats();renderCursorSummary()}
 function renderAll(){renderFiles();renderChannels();renderLegend();fillDiff();renderStats();renderRangeStats();draw()}
-async function openFiles(fs){for(const f of fs){try{state.files.push(parse(await f.arrayBuffer(),f.name))}catch(e){alert(f.name+"\n"+e.message)}}state.view={start:0,end:1};clearCursors();renderAll()}
+async function openFiles(fs){
+ for(const f of fs){try{const buf=await f.arrayBuffer(),id=fileId(f.name,buf),parsed=parse(buf,f.name,id);state.files=state.files.filter(x=>x.id!==id);state.files.push(parsed);if(state.fileVisible[id]===undefined)state.fileVisible[id]=true;await dbPut({id,name:f.name,buffer:buf,addedAt:Date.now()})}catch(e){alert(f.name+"\n"+e.message)}}
+ state.view={start:0,end:1};clearCursors();renderAll();persistSettings()
+}
+async function restoreFiles(){try{const rows=await dbAll();for(const r of rows){try{const parsed=parse(r.buffer,r.name,r.id);state.files.push(parsed);if(state.fileVisible[r.id]===undefined)state.fileVisible[r.id]=true}catch{}}renderAll()}catch{}}
+async function removeFile(id){const f=state.files.find(x=>x.id===id);if(!f)return;if(!confirm("\""+f.name+"\"을 로컬 저장소에서도 삭제할까요?"))return;state.files=state.files.filter(x=>x.id!==id);delete state.fileVisible[id];for(const k of Object.keys(state.visible))if(k.startsWith(id+"::"))delete state.visible[k];state.derived=state.derived.filter(d=>!d.a.startsWith(id+"::")&&!d.b.startsWith(id+"::"));await dbDelete(id);clearCursors();renderAll();persistSettings()}
 load();
 $("ts").value=state.ts;$("scale").value=state.scale;$("zero").checked=state.zero;
-$("file").onchange=e=>openFiles(e.target.files);
+$("file").onchange=e=>{openFiles(e.target.files);e.target.value=""};
 $("ts").onchange=e=>{state.ts=Math.max(.001,+e.target.value||1);renderStats();renderRangeStats();draw()};
 $("ts1").onclick=()=>{$("ts").value=state.ts=1;renderStats();renderRangeStats();draw()};
 $("ts2").onclick=()=>{$("ts").value=state.ts=2;renderStats();renderRangeStats();draw()};
 $("save").onclick=save;
-$("clear").onclick=()=>{if(confirm("불러온 REC를 모두 제거할까요?")){state.files=[];state.derived=[];state.view={start:0,end:1};clearCursors();renderAll()}};
+$("clear").onclick=async()=>{if(confirm("불러온 REC와 iPhone에 저장된 REC를 모두 삭제할까요?")){state.files=[];state.derived=[];state.fileVisible={};state.visible={};state.view={start:0,end:1};await dbClear();clearCursors();renderAll();persistSettings()}};
 $("scale").onchange=e=>{state.scale=e.target.value;draw()};
 $("zero").onchange=e=>{state.zero=e.target.checked;draw()};
 $("resetView").onclick=resetView;$("clearCursors").onclick=clearCursors;
-$("addDiff").onclick=()=>{const a=$("a").value,b=$("b").value;if(!a||!b||a===b)return alert("서로 다른 두 데이터를 선택하세요.");state.derived.push({a,b,name:$("diffName").value.trim()||"A-B",color:"#111827"});renderAll()};
+$("allOn").onclick=()=>setAll(true);$("allOff").onclick=()=>setAll(false);
+$("addDiff").onclick=()=>{const a=$("a").value,b=$("b").value;if(!a||!b||a===b)return alert("서로 다른 두 데이터를 선택하세요.");const A=base().find(x=>x.id===a);state.derived.push({a,b,name:$("diffName").value.trim()||"A-B",color:"#111827",unit:A?.unit||""});renderAll();persistSettings()};
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab,.panel").forEach(x=>x.classList.remove("active"));t.classList.add("active");$(t.dataset.tab).classList.add("active");if(t.dataset.tab==="graph")setTimeout(draw,20)});
 const cv=$("canvas"),pts=new Map();let gesture=null,moved=false;
 function chartIndex(clientX){const r=cv.getBoundingClientRect(),L=48,R=12,n=maxN();if(!n)return 0;const[lo,hi]=viewIndices(n),f=Math.max(0,Math.min(1,(clientX-r.left-L)/(r.width-L-R)));return Math.round(lo+f*(hi-lo))}
@@ -140,5 +146,5 @@ function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;
 cv.addEventListener("pointerup",pointerEnd);cv.addEventListener("pointercancel",pointerEnd);
 window.addEventListener("resize",draw);
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});
-renderAll();
+renderAll();restoreFiles();
 })();
