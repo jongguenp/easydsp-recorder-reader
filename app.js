@@ -1,6 +1,6 @@
 (()=>{"use strict";
-const $=id=>document.getElementById(id),P=16,SKEY="easydsp-rec-settings-v2";
-const state={ts:1,files:[],aliases:{},colors:{},visible:{},derived:[],scale:"common",zero:false,view:{start:0,end:1},cursorA:null,cursorB:null,nextCursor:"A"};
+const $=id=>document.getElementById(id),P=16,SKEY="easydsp-rec-settings-v3",DBNAME="easydsp-rec-db",STORE="files";
+const state={ts:1,files:[],aliases:{},colors:{},units:{},visible:{},fileVisible:{},derived:[],scale:"common",zero:false,view:{start:0,end:1},cursorA:null,cursorB:null,nextCursor:"A"};
 const palette=["#2563eb","#dc2626","#059669","#7c3aed","#d97706","#0891b2","#db2777","#4f46e5"];
 class RecError extends Error{}
 function ascii(u){let s="",c=8192;for(let i=0;i<u.length;i+=c)s+=String.fromCharCode(...u.subarray(i,Math.min(i+c,u.length)));return s}
