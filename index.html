@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>EasyDSP REC Analyzer</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header><div><h1>EasyDSP REC Analyzer</h1><small>iPhone Offline Analyzer · MVP</small></div><label class="btn primary">REC 열기<input id="file" type="file" accept=".rec,application/octet-stream" multiple hidden></label></header>
+<main>
+<section class="card controls">
+<label>Ts <span><input id="ts" type="number" value="1" min="0.001" step="0.1" inputmode="decimal"> ms</span></label>
+<button id="ts1" class="chip">1 ms</button><button id="ts2" class="chip">2 ms</button>
+<button id="save" class="btn">설정 저장</button>
+</section>
+<section class="card">
+<div class="row"><h2>파일</h2><button id="clear" class="link danger">전체 삭제</button></div>
+<div id="files" class="empty">REC 파일을 선택하세요.</div>
+</section>
+<nav><button class="tab active" data-tab="graph">그래프</button><button class="tab" data-tab="channels">채널</button><button class="tab" data-tab="analysis">분석</button></nav>
+<section id="graph" class="panel active">
+<div class="card">
+<div class="row wrap"><label>Y축 <select id="scale"><option value="common">공통 Auto</option><option value="per">채널별 Auto</option></select></label><label><input id="zero" type="checkbox"> 0 포함</label></div>
+<div id="legend" class="legend"></div>
+<div class="chart"><canvas id="canvas"></canvas><div id="tip" class="tip hidden"></div></div>
+<p class="hint">그래프를 터치하면 가장 가까운 샘플의 시간/값을 표시합니다.</p>
+</div>
+<div class="card">
+<h2>A − B 오차 채널</h2>
+<div class="diff"><select id="a"></select><b>−</b><select id="b"></select><input id="diffName" placeholder="예: 위치 오차"><button id="addDiff" class="btn primary">추가</button></div>
+</div>
+</section>
+<section id="channels" class="panel"><div class="card"><h2>채널 설정</h2><div id="channelList"></div></div></section>
+<section id="analysis" class="panel"><div class="card"><h2>표시 데이터 통계</h2><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>시간</th><th>Max</th><th>시간</th><th>Mean</th><th>RMS</th></tr></thead><tbody id="stats"></tbody></table></div></div></section>
+</main>
+<footer>REC 데이터는 기기 안에서만 파싱됩니다.</footer>
+<script src="./app.js"></script>
+</body></html>
