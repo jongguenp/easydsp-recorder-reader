@@ -4,10 +4,62 @@ const state={ts:1,files:[],aliases:{},colors:{},visible:{},derived:[],scale:"com
 const palette=["#2563eb","#dc2626","#059669","#7c3aed","#d97706","#0891b2","#db2777","#4f46e5"];
 class RecError extends Error{}
 function ascii(u){let s="",c=8192;for(let i=0;i<u.length;i+=c)s+=String.fromCharCode(...u.subarray(i,Math.min(i+c,u.length)));return s}
-function channels(u){const h=ascii(u.subarray(0,Math.min(4096,u.length))),re=/m_DATA\d+/g,seen=new Set(),a=[];let m;while((m=re.exec(h)))if(!seen.has(m[0])){seen.add(m[0]);a.push({name:m[0],off:m.index})}return a.sort((x,y)=>+x.name.split("DATA")[1]-+y.name.split("DATA")[1])}
-function score(v,start,counts){let p=start,s=0;try{for(const n of counts){for(const i of [...new Set([0,Math.min(1,n-1),Math.min(2,n-1),n-1])]){const o=p+i*P;if(o+16>v.byteLength)return-1;const x=v.getFloat64(o,true),y=v.getFloat64(o+8,true);if(!Number.isFinite(x)||!Number.isFinite(y))return-1;if(Math.abs(x-i)<1e-9)s+=4}p+=n*P}}catch{return-1}return s}
-function infer(u,ch){if(!ch.length)throw new RecError("m_DATA# 채널을 찾지 못했습니다.");const v=new DataView(u.buffer,u.byteOffset,u.byteLength),n=ch.length,start=Math.max(...ch.map(x=>x.off))+8,end=Math.min(4096,u.length-4*n),cand=[];for(let o=Math.ceil(start/4)*4;o<end;o+=4){let counts=[],tot=0,ok=true;for(let i=0;i<n;i++){const c=v.getUint32(o+4*i,true);if(c<1||c>1e7){ok=false;break}counts.push(c);tot+=c}if(!ok)continue;const ds=u.length-P*tot;if(ds<=o||ds<0||ds%8)continue;const sc=score(v,ds,counts);if(sc>=10*n)cand.push({o,counts,ds,sc})}if(!cand.length)throw new RecError("지원하지 않는 REC 형식입니다.");cand.sort((a,b)=>b.sc-a.sc||a.o-b.o);return cand[0]}
-function parse(buf,name){const u=new Uint8Array(buf);if(u.length<256)throw new RecError("REC 파일이 너무 작습니다.");const ch=channels(u),inf=infer(u,ch),v=new DataView(u.buffer,u.byteOffset,u.byteLength);let p=inf.ds,out=[];ch.forEach((c,k)=>{const n=inf.counts[k],x=new Float64Array(n),y=new Float64Array(n);for(let i=0;i<n;i++){x[i]=v.getFloat64(p+i*P,true);y[i]=v.getFloat64(p+i*P+8,true)}out.push({name:c.name,x,y});p+=n*P});if(p!==u.length)throw new RecError("payload 길이가 일치하지 않습니다.");return{id:crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random(),name,channels:out}}
+function readCString(u,start,max=80){let end=start;while(end<u.length&&end<start+max&&u[end]!==0)end++;return ascii(u.subarray(start,end)).trim()}
+function channels(u){
+  const h=ascii(u.subarray(0,Math.min(4096,u.length))),re=/m_DATA\d+/g,seen=new Set(),a=[];let m;
+  while((m=re.exec(h)))if(!seen.has(m[0])){seen.add(m[0]);a.push({name:m[0],off:m.index})}
+  if(a.length)return a.sort((x,y)=>+x.name.split("DATA")[1]-+y.name.split("DATA")[1]);
+  const slots=[128,228,328,428,528,628,728,828],fallback=[];
+  for(const off of slots){const name=readCString(u,off);if(!/^[A-Za-z_][A-Za-z0-9_.]*(?:\[\d+\])?$/.test(name))return[];fallback.push({name,off})}
+  return fallback
+}
+function score(v,start,counts){
+  let p=start,s=0;
+  try{
+    for(const n of counts){
+      if(n<2)return-1;
+      const ids=[...new Set([0,Math.min(1,n-1),Math.min(2,n-1),n-1])];
+      let prev=null;
+      for(const i of ids){
+        const o=p+i*P;if(o+16>v.byteLength)return-1;
+        const x=v.getFloat64(o,true),y=v.getFloat64(o+8,true);
+        if(!Number.isFinite(x)||!Number.isFinite(y))return-1;
+        if(prev!==null&&x>=prev)s+=3;
+        if(Math.abs(x-i)<1e-9)s+=2;
+        prev=x
+      }
+      p+=n*P
+    }
+  }catch{return-1}
+  return s
+}
+function infer(u,ch){
+  if(!ch.length)throw new RecError("REC 채널 이름을 찾지 못했습니다.");
+  const v=new DataView(u.buffer,u.byteOffset,u.byteLength),n=ch.length,start=Math.max(...ch.map(x=>x.off))+8,end=Math.min(4096,u.length-4*n),cand=[];
+  for(let o=Math.ceil(start/4)*4;o<end;o+=4){
+    let counts=[],tot=0,ok=true;
+    for(let i=0;i<n;i++){const c=v.getUint32(o+4*i,true);if(c<2||c>1e7){ok=false;break}counts.push(c);tot+=c}
+    if(!ok)continue;
+    const ds=u.length-P*tot;if(ds<=o||ds<0||ds%8)continue;
+    const sc=score(v,ds,counts);if(sc>=6*n)cand.push({o,counts,ds,sc})
+  }
+  if(!cand.length)throw new RecError("지원하지 않는 REC 형식입니다.");
+  cand.sort((a,b)=>b.sc-a.sc||a.o-b.o);return cand[0]
+}
+function parse(buf,name){
+  const u=new Uint8Array(buf);if(u.length<256)throw new RecError("REC 파일이 너무 작습니다.");
+  const ch=channels(u),inf=infer(u,ch),v=new DataView(u.buffer,u.byteOffset,u.byteLength);let p=inf.ds,out=[];
+  ch.forEach((c,k)=>{
+    const n=inf.counts[k],tx=[],ty=[];
+    for(let i=0;i<n;i++){
+      const xv=v.getFloat64(p+i*P,true),yv=v.getFloat64(p+i*P+8,true);
+      if(Number.isFinite(xv)&&Number.isFinite(yv)&&Math.abs(yv)<1e300){tx.push(xv);ty.push(yv)}
+    }
+    out.push({name:c.name,x:Float64Array.from(tx),y:Float64Array.from(ty)});p+=n*P
+  });
+  if(p!==u.length)throw new RecError("payload 길이가 일치하지 않습니다.");
+  return{id:crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random(),name,channels:out}
+}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||"{}");Object.assign(state,{ts:+s.ts||1,aliases:s.aliases||{},colors:s.colors||{},visible:s.visible||{},scale:s.scale||"common",zero:!!s.zero,derived:s.derived||[]})}catch{}}
 function save(){localStorage.setItem(SKEY,JSON.stringify({ts:state.ts,aliases:state.aliases,colors:state.colors,visible:state.visible,scale:state.scale,zero:state.zero,derived:state.derived.map(d=>({a:d.a,b:d.b,name:d.name,color:d.color}))}));alert("설정을 저장했습니다.")}
 function sid(f,c){return f.id+"::"+c.name}
