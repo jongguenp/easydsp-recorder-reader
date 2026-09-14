@@ -19,7 +19,7 @@
 <button id="save" class="btn">설정 저장</button>
 </section>
 <section class="card">
-<div class="row"><h2>파일</h2><button id="clear" class="link danger">전체 삭제</button></div>
+<div class="row"><div><h2>파일</h2><div class="hint">불러온 REC는 이 iPhone의 로컬 저장소에 보관됩니다.</div></div><button id="clear" class="link danger">전체 삭제</button></div>
 <div id="files" class="empty">REC 파일을 선택하세요.</div>
 </section>
 <nav><button class="tab active" data-tab="graph">그래프</button><button class="tab" data-tab="channels">채널</button><button class="tab" data-tab="analysis">분석</button></nav>
@@ -36,7 +36,13 @@
 <div class="diff"><select id="a"></select><b>−</b><select id="b"></select><input id="diffName" placeholder="예: 위치 오차"><button id="addDiff" class="btn primary">추가</button></div>
 </div>
 </section>
-<section id="channels" class="panel"><div class="card"><h2>채널 설정</h2><div id="channelList"></div></div></section>
+<section id="channels" class="panel">
+<div class="card">
+<div class="row wrap"><h2>채널 설정</h2><div><button id="allOn" class="chip">전체 ON</button> <button id="allOff" class="chip">전체 OFF</button></div></div>
+<div class="hint">이름·색상·단위는 원래 변수명을 기준으로 저장되어 다음 REC에도 적용됩니다.</div>
+<div id="channelList"></div>
+</div>
+</section>
 <section id="analysis" class="panel">
 <div class="card"><h2>표시 데이터 전체 통계</h2><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>시간</th><th>Max</th><th>시간</th><th>Mean</th><th>RMS</th></tr></thead><tbody id="stats"></tbody></table></div></div>
 <div class="card"><h2>Cursor A~B 구간 통계</h2><div id="rangeInfo" class="hint">Cursor A와 B를 지정하면 선택 구간 통계를 계산합니다.</div><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>Max</th><th>Mean</th><th>RMS</th><th>ΔY</th></tr></thead><tbody id="rangeStats"></tbody></table></div></div>
