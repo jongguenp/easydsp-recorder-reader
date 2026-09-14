@@ -25,10 +25,11 @@
 <nav><button class="tab active" data-tab="graph">그래프</button><button class="tab" data-tab="channels">채널</button><button class="tab" data-tab="analysis">분석</button></nav>
 <section id="graph" class="panel active">
 <div class="card">
-<div class="row wrap"><label>Y축 <select id="scale"><option value="common">공통 Auto</option><option value="per">채널별 Auto</option></select></label><label><input id="zero" type="checkbox"> 0 포함</label></div>
+<div class="row wrap"><label>Y축 <select id="scale"><option value="common">공통 Auto</option><option value="per">채널별 Auto</option></select></label><label><input id="zero" type="checkbox"> 0 포함</label><button id="resetView" class="chip">전체 보기</button><button id="clearCursors" class="chip">커서 초기화</button></div>
 <div id="legend" class="legend"></div>
 <div class="chart"><canvas id="canvas"></canvas><div id="tip" class="tip hidden"></div></div>
-<p class="hint">그래프를 터치하면 가장 가까운 샘플의 시간/값을 표시합니다.</p>
+<div id="cursorSummary" class="cursor-summary empty">Cursor A/B를 지정하면 Δt와 ΔY를 표시합니다.</div>
+<p class="hint">한 손가락 드래그: 이동 · 두 손가락 핀치: 확대/축소 · 탭: Cursor A/B 순서로 지정</p>
 </div>
 <div class="card">
 <h2>A − B 오차 채널</h2>
@@ -36,7 +37,10 @@
 </div>
 </section>
 <section id="channels" class="panel"><div class="card"><h2>채널 설정</h2><div id="channelList"></div></div></section>
-<section id="analysis" class="panel"><div class="card"><h2>표시 데이터 통계</h2><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>시간</th><th>Max</th><th>시간</th><th>Mean</th><th>RMS</th></tr></thead><tbody id="stats"></tbody></table></div></div></section>
+<section id="analysis" class="panel">
+<div class="card"><h2>표시 데이터 전체 통계</h2><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>시간</th><th>Max</th><th>시간</th><th>Mean</th><th>RMS</th></tr></thead><tbody id="stats"></tbody></table></div></div>
+<div class="card"><h2>Cursor A~B 구간 통계</h2><div id="rangeInfo" class="hint">Cursor A와 B를 지정하면 선택 구간 통계를 계산합니다.</div><div class="table"><table><thead><tr><th>데이터</th><th>Min</th><th>Max</th><th>Mean</th><th>RMS</th><th>ΔY</th></tr></thead><tbody id="rangeStats"></tbody></table></div></div>
+</section>
 </main>
 <footer>REC 데이터는 기기 안에서만 파싱됩니다.</footer>
 <script src="./app.js"></script>
