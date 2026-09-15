@@ -101,10 +101,12 @@ function ranges(series,lo,hi){
 }
 function draw(){
  const cv=$("canvas"),box=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=Math.max(1,box.width*dpr);cv.height=Math.max(1,box.height*dpr);const c=cv.getContext("2d");c.scale(dpr,dpr);
- const W=box.width,H=box.height,L=48,R=12,T=16,B=34,series=visibleSeries();c.clearRect(0,0,W,H);c.strokeStyle="#e2e8f0";c.fillStyle="#64748b";c.font="11px sans-serif";
- for(let i=0;i<=4;i++){const y=T+(H-T-B)*i/4;c.beginPath();c.moveTo(L,y);c.lineTo(W-R,y);c.stroke()}
+ const W=box.width,H=box.height,L=58,R=12,T=16,B=34,series=visibleSeries();c.clearRect(0,0,W,H);c.strokeStyle="#e2e8f0";c.fillStyle="#64748b";c.font="11px sans-serif";
  if(!series.length){c.fillText("표시할 채널을 선택하세요.",L+10,T+30);return}
  const n=Math.max(...series.map(s=>s.y.length)),[lo,hi]=viewIndices(n),span=Math.max(1,hi-lo),rg=ranges(series,lo,hi);
+ const common=state.scale==="common"?rg.get(series[0].id):null;
+ for(let i=0;i<=4;i++){const y=T+(H-T-B)*i/4;c.strokeStyle="#e2e8f0";c.beginPath();c.moveTo(L,y);c.lineTo(W-R,y);c.stroke();if(common){const val=common[1]-(common[1]-common[0])*i/4;c.fillStyle="#64748b";c.textAlign="right";c.fillText(fmt(val),L-6,y+4)}}
+ c.textAlign="left";
  for(const s of series){const [mn,mx]=rg.get(s.id),h=Math.min(hi,s.y.length-1),l=Math.min(lo,h);c.strokeStyle=s.color;c.lineWidth=1.7;c.beginPath();let started=false;for(let i=l;i<=h;i++){const x=L+(W-L-R)*((i-lo)/span),y=T+(H-T-B)*(1-(s.y[i]-mn)/(mx-mn));if(started)c.lineTo(x,y);else{c.moveTo(x,y);started=true}}c.stroke()}
  c.fillStyle="#64748b";c.fillText(time(lo).toFixed(3)+" s",L,H-10);c.fillText(time(hi).toFixed(3)+" s",W-R-55,H-10);
  const pair=cursorPair();if(pair){const[a,b]=pair;c.fillStyle="#dbeafe";const xa=L+(W-L-R)*((a-lo)/span),xb=L+(W-L-R)*((b-lo)/span);if(xb>=L&&xa<=W-R)c.fillRect(Math.max(L,xa),T,Math.min(W-R,xb)-Math.max(L,xa),H-T-B)}
@@ -135,12 +137,12 @@ $("allOn").onclick=()=>setAll(true);$("allOff").onclick=()=>setAll(false);
 $("addDiff").onclick=()=>{const a=$("a").value,b=$("b").value;if(!a||!b||a===b)return alert("서로 다른 두 데이터를 선택하세요.");const A=base().find(x=>x.id===a);state.derived.push({a,b,name:$("diffName").value.trim()||"A-B",color:"#111827",unit:A?.unit||""});renderAll();persistSettings()};
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab,.panel").forEach(x=>x.classList.remove("active"));t.classList.add("active");$(t.dataset.tab).classList.add("active");if(t.dataset.tab==="graph")setTimeout(draw,20)});
 const cv=$("canvas"),pts=new Map();let gesture=null,moved=false;
-function chartIndex(clientX){const r=cv.getBoundingClientRect(),L=48,R=12,n=maxN();if(!n)return 0;const[lo,hi]=viewIndices(n),f=Math.max(0,Math.min(1,(clientX-r.left-L)/(r.width-L-R)));return Math.round(lo+f*(hi-lo))}
+function chartIndex(clientX){const r=cv.getBoundingClientRect(),L=58,R=12,n=maxN();if(!n)return 0;const[lo,hi]=viewIndices(n),f=Math.max(0,Math.min(1,(clientX-r.left-L)/(r.width-L-R)));return Math.round(lo+f*(hi-lo))}
 function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
 cv.addEventListener("pointerdown",e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY});moved=false;if(pts.size===1){gesture={type:"pan",start:{...state.view},x:e.clientX}}else if(pts.size===2){const p=[...pts.values()];gesture={type:"pinch",start:{...state.view},d:dist(p[0],p[1]),mid:(p[0].x+p[1].x)/2}}});
 cv.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;const p=pts.get(e.pointerId);p.x=e.clientX;p.y=e.clientY;if(Math.hypot(p.x-p.sx,p.y-p.sy)>5)moved=true;const r=cv.getBoundingClientRect();
- if(pts.size===1&&gesture?.type==="pan"&&moved){const dx=e.clientX-gesture.x,span=gesture.start.end-gesture.start.start,shift=-dx/Math.max(1,r.width-60)*span;state.view.start=gesture.start.start+shift;state.view.end=gesture.start.end+shift;clampView();draw()}
- else if(pts.size>=2){const a=[...pts.values()].slice(0,2),d=dist(a[0],a[1]);if(!gesture||gesture.type!=="pinch"){gesture={type:"pinch",start:{...state.view},d,mid:(a[0].x+a[1].x)/2}}const ratio=Math.max(.2,Math.min(5,gesture.d/Math.max(1,d))),oldSpan=gesture.start.end-gesture.start.start,newSpan=Math.max(.002,Math.min(1,oldSpan*ratio)),midX=(a[0].x+a[1].x)/2,anchor=Math.max(0,Math.min(1,(midX-r.left-48)/Math.max(1,r.width-60))),center=gesture.start.start+anchor*oldSpan;state.view.start=center-anchor*newSpan;state.view.end=state.view.start+newSpan;clampView();moved=true;draw()}
+ if(pts.size===1&&gesture?.type==="pan"&&moved){const dx=e.clientX-gesture.x,span=gesture.start.end-gesture.start.start,shift=-dx/Math.max(1,r.width-70)*span;state.view.start=gesture.start.start+shift;state.view.end=gesture.start.end+shift;clampView();draw()}
+ else if(pts.size>=2){const a=[...pts.values()].slice(0,2),d=dist(a[0],a[1]);if(!gesture||gesture.type!=="pinch"){gesture={type:"pinch",start:{...state.view},d,mid:(a[0].x+a[1].x)/2}}const ratio=Math.max(.2,Math.min(5,gesture.d/Math.max(1,d))),oldSpan=gesture.start.end-gesture.start.start,newSpan=Math.max(.002,Math.min(1,oldSpan*ratio)),midX=(a[0].x+a[1].x)/2,anchor=Math.max(0,Math.min(1,(midX-r.left-58)/Math.max(1,r.width-70))),center=gesture.start.start+anchor*oldSpan;state.view.start=center-anchor*newSpan;state.view.end=state.view.start+newSpan;clampView();moved=true;draw()}
 });
 function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;pts.delete(e.pointerId);if(single&&!moved&&was){const i=chartIndex(e.clientX);setCursor(i);const s=visibleSeries();$("tip").classList.remove("hidden");$("tip").textContent="Cursor "+(state.nextCursor==="A"?"B":"A")+" · Sample "+i+" · "+time(i).toFixed(6)+" s\n"+s.map(x=>label(x)+": "+fmt(x.y[Math.min(i,x.y.length-1)])).join("\n")}if(!pts.size)gesture=null}
 cv.addEventListener("pointerup",pointerEnd);cv.addEventListener("pointercancel",pointerEnd);
