@@ -46,7 +46,7 @@ function alias(n){return state.aliases[n]||n}
 function unit(n){return state.units[n]||""}
 function color(n){if(!state.colors[n])state.colors[n]=palette[(+(n.match(/\d+/)||[0])[0])%palette.length];return state.colors[n]}
 function base(){let a=[];for(const f of state.files)for(const c of f.channels){const id=sid(f,c);a.push({id,fileId:f.id,file:f.name,original:c.name,name:alias(c.name),unit:unit(c.name),color:color(c.name),x:c.x,y:c.y,visible:state.fileVisible[f.id]!==false&&state.visible[id]!==false})}return a}
-function all(){const b=base(),map=new Map(b.map(x=>[x.id,x])),d=[];for(const q of state.derived){const A=map.get(q.a),B=map.get(q.b);if(!A||!B)continue;const n=Math.min(A.y.length,B.y.length),y=new Float64Array(n),x=new Float64Array(n);for(let i=0;i<n;i++){x[i]=i;y[i]=A.y[i]-B.y[i]}d.push({id:"d:"+q.a+"-"+q.b+"-"+q.name,file:"계산",original:q.name,name:q.name,color:q.color||"#111827",x,y,visible:true,derived:true})}return b.concat(d)}
+function all(){const b=base(),map=new Map(b.map(x=>[x.id,x])),d=[];for(const q of state.derived){const A=map.get(q.a),B=map.get(q.b);if(!A||!B)continue;const n=Math.min(A.y.length,B.y.length),y=new Float64Array(n),x=new Float64Array(n);for(let i=0;i<n;i++){x[i]=i;y[i]=A.y[i]-B.y[i]}d.push({id:"d:"+q.a+"-"+q.b+"-"+q.name,file:"계산",original:q.name,name:q.name,unit:q.unit||A.unit||"",color:q.color||"#111827",x,y,visible:true,derived:true})}return b.concat(d)}
 function visibleSeries(){return all().filter(s=>s.visible)}
 function label(s){return s.unit?s.name+" ["+s.unit+"]":s.name}
 function fmt(v){if(!Number.isFinite(v))return"-";const a=Math.abs(v);return a>=1e4||a&&a<1e-3?v.toExponential(4):v.toFixed(4).replace(/\.?0+$/,"")}
@@ -93,7 +93,7 @@ function renderRangeStats(){
  const p=cursorPair(),v=visibleSeries(),body=$("rangeStats"),info=$("rangeInfo");
  if(!p){info.textContent="Cursor A와 B를 지정하면 선택 구간 통계를 계산합니다.";body.innerHTML='<tr><td colspan="6">구간이 선택되지 않았습니다.</td></tr>';return}
  const [lo,hi]=p;info.textContent=`${time(lo).toFixed(6)} s ~ ${time(hi).toFixed(6)} s · ${hi-lo+1} samples · Δt ${(time(hi)-time(lo)).toFixed(6)} s`;
- body.innerHTML=v.map(s=>{const q=statsRange(s,lo,hi),a=s.y[Math.min(lo,s.y.length-1)],b=s.y[Math.min(hi,s.y.length-1)];return`<tr><td>${s.name}<br><small>${s.file}</small></td><td>${fmt(q.min)}</td><td>${fmt(q.max)}</td><td>${fmt(q.mean)}</td><td>${fmt(q.rms)}</td><td>${fmt(b-a)}</td></tr>`}).join("")
+ body.innerHTML=v.map(s=>{const q=statsRange(s,lo,hi),a=s.y[Math.min(lo,s.y.length-1)],b=s.y[Math.min(hi,s.y.length-1)];return`<tr><td>${label(s)}<br><small>${s.file}</small></td><td>${fmt(q.min)}</td><td>${fmt(q.max)}</td><td>${fmt(q.mean)}</td><td>${fmt(q.rms)}</td><td>${fmt(b-a)}</td></tr>`}).join("")
 }
 function ranges(series,lo,hi){
  if(state.scale==="per")return new Map(series.map(s=>{let mn=Infinity,mx=-Infinity;const h=Math.min(hi,s.y.length-1);for(let i=Math.min(lo,h);i<=h;i++){const y=s.y[i];if(y<mn)mn=y;if(y>mx)mx=y}if(state.zero){mn=Math.min(0,mn);mx=Math.max(0,mx)}if(!Number.isFinite(mn)){mn=0;mx=1}if(mn===mx){mn-=1;mx+=1}return[s.id,[mn,mx]]}));
@@ -123,13 +123,13 @@ async function removeFile(id){const f=state.files.find(x=>x.id===id);if(!f)retur
 load();
 $("ts").value=state.ts;$("scale").value=state.scale;$("zero").checked=state.zero;
 $("file").onchange=e=>{openFiles(e.target.files);e.target.value=""};
-$("ts").onchange=e=>{state.ts=Math.max(.001,+e.target.value||1);renderStats();renderRangeStats();draw()};
-$("ts1").onclick=()=>{$("ts").value=state.ts=1;renderStats();renderRangeStats();draw()};
-$("ts2").onclick=()=>{$("ts").value=state.ts=2;renderStats();renderRangeStats();draw()};
+$("ts").onchange=e=>{state.ts=Math.max(.001,+e.target.value||1);renderStats();renderRangeStats();draw();persistSettings()};
+$("ts1").onclick=()=>{$("ts").value=state.ts=1;renderStats();renderRangeStats();draw();persistSettings()};
+$("ts2").onclick=()=>{$("ts").value=state.ts=2;renderStats();renderRangeStats();draw();persistSettings()};
 $("save").onclick=save;
 $("clear").onclick=async()=>{if(confirm("불러온 REC와 iPhone에 저장된 REC를 모두 삭제할까요?")){state.files=[];state.derived=[];state.fileVisible={};state.visible={};state.view={start:0,end:1};await dbClear();clearCursors();renderAll();persistSettings()}};
-$("scale").onchange=e=>{state.scale=e.target.value;draw()};
-$("zero").onchange=e=>{state.zero=e.target.checked;draw()};
+$("scale").onchange=e=>{state.scale=e.target.value;draw();persistSettings()};
+$("zero").onchange=e=>{state.zero=e.target.checked;draw();persistSettings()};
 $("resetView").onclick=resetView;$("clearCursors").onclick=clearCursors;
 $("allOn").onclick=()=>setAll(true);$("allOff").onclick=()=>setAll(false);
 $("addDiff").onclick=()=>{const a=$("a").value,b=$("b").value;if(!a||!b||a===b)return alert("서로 다른 두 데이터를 선택하세요.");const A=base().find(x=>x.id===a);state.derived.push({a,b,name:$("diffName").value.trim()||"A-B",color:"#111827",unit:A?.unit||""});renderAll();persistSettings()};
@@ -142,7 +142,7 @@ cv.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;const p=pt
  if(pts.size===1&&gesture?.type==="pan"&&moved){const dx=e.clientX-gesture.x,span=gesture.start.end-gesture.start.start,shift=-dx/Math.max(1,r.width-60)*span;state.view.start=gesture.start.start+shift;state.view.end=gesture.start.end+shift;clampView();draw()}
  else if(pts.size>=2){const a=[...pts.values()].slice(0,2),d=dist(a[0],a[1]);if(!gesture||gesture.type!=="pinch"){gesture={type:"pinch",start:{...state.view},d,mid:(a[0].x+a[1].x)/2}}const ratio=Math.max(.2,Math.min(5,gesture.d/Math.max(1,d))),oldSpan=gesture.start.end-gesture.start.start,newSpan=Math.max(.002,Math.min(1,oldSpan*ratio)),midX=(a[0].x+a[1].x)/2,anchor=Math.max(0,Math.min(1,(midX-r.left-48)/Math.max(1,r.width-60))),center=gesture.start.start+anchor*oldSpan;state.view.start=center-anchor*newSpan;state.view.end=state.view.start+newSpan;clampView();moved=true;draw()}
 });
-function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;pts.delete(e.pointerId);if(single&&!moved&&was){const i=chartIndex(e.clientX);setCursor(i);const s=visibleSeries();$("tip").classList.remove("hidden");$("tip").textContent="Cursor "+(state.nextCursor==="A"?"B":"A")+" · Sample "+i+" · "+time(i).toFixed(6)+" s\n"+s.map(x=>x.name+": "+fmt(x.y[Math.min(i,x.y.length-1)])).join("\n")}if(!pts.size)gesture=null}
+function pointerEnd(e){const was=pts.get(e.pointerId);const single=pts.size===1;pts.delete(e.pointerId);if(single&&!moved&&was){const i=chartIndex(e.clientX);setCursor(i);const s=visibleSeries();$("tip").classList.remove("hidden");$("tip").textContent="Cursor "+(state.nextCursor==="A"?"B":"A")+" · Sample "+i+" · "+time(i).toFixed(6)+" s\n"+s.map(x=>label(x)+": "+fmt(x.y[Math.min(i,x.y.length-1)])).join("\n")}if(!pts.size)gesture=null}
 cv.addEventListener("pointerup",pointerEnd);cv.addEventListener("pointercancel",pointerEnd);
 window.addEventListener("resize",draw);
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});
